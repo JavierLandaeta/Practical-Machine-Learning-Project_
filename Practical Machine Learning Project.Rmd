@@ -1,0 +1,184 @@
+---
+title: "Practical Machine Learning Project_Javier Landaeta"
+author: "Javier"
+date: "12 de octubre de 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1) INTRODUCTION
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+
+Those 5 different ways are as follows:
+
+- **Class A:** Exactly according to the specification (Correct performance)
+- **Class B:** Throwing the elbows to the front
+- **Class C:** Lifting the dumbbell only halfway
+- **Class D:** Lowering the dumbbell only halfway
+- **Class E:** Throwing the hips to the front
+
+The barbell lifting was made by 6 male between age 20-28 years.
+
+The goal of this project is to predict the manner in which they did the exercise (Classes)
+
+### Libraries
+```{r}
+library(caret)
+library(rattle)
+library(stR)
+library(downloader)
+
+```
+
+
+## 2) ACQUIRING THE DATA 
+
+Training data is taken from the following URL > https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+Tesing data is taken from the following URL > https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+```{r}
+
+url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+filename <- "pml-training.csv" 
+download(url, destfile=filename)
+train <- read.csv(filename)
+
+url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+filename <- "pml-testing.csv" 
+download(url, destfile=filename)
+test <- read.csv(filename)
+str(train)
+```
+as we can see in the figure above, there are a lot of observations that are NA values or blank values. We will remove them.
+
+## 3) CLEANING THE DATA
+
+
+### 3.1) Cleaning training data
+```{r}
+indColToRemove <- which(colSums(is.na(train) |train=="" | train== "#DIV/0!")>0.9*dim(train)[1]) 
+TrainDataClean <- train[,-indColToRemove]
+TrainDataClean <- TrainDataClean[,-c(1:7)]
+dim(TrainDataClean)
+table(is.na(TrainDataClean))
+```
+
+### 3.2) Cleaning test data
+```{r}
+indColToRemove <- which(colSums(is.na(test) | test=="")>0.9*dim(test)[1]) 
+TestDataClean <- test[,-indColToRemove]
+TestDataClean <- TestDataClean[,-1]
+dim(TestDataClean)
+table(is.na(TestDataClean))
+```
+
+
+### 3.3) Create a partition  of training dataset
+```{r}
+set.seed(33833)
+inTrain1 <- createDataPartition(TrainDataClean$classe, p=0.75, list=FALSE)
+Train1 <- TrainDataClean[inTrain1,]
+Test1 <- TrainDataClean[-inTrain1,]
+dim(Train1)
+dim(Test1)
+```
+
+The following steps will take in consideration:
+
+- Test 3 different models> *classification tree*, *random forest *, *gradient boosting method*.
+- Cross-validation techinque.
+
+## CLASSIFICATION TREE
+```{r}
+trControl <- trainControl(method="cv", number=5)
+model_CT <- train(classe~., data=Train1, method="rpart", trControl=trControl)
+fancyRpartPlot(model_CT$finalModel)
+```
+
+```{r}
+trainpred <- predict(model_CT,newdata=Test1)
+confMatCT <- confusionMatrix(Test1$classe,trainpred)
+```
+
+### Confusion matrix
+```{r}
+confMatCT$table
+```
+
+### Accuracy
+```{r}
+confMatCT$overall[1]
+```
+
+
+As we can see in the Accuracy of the model and in the COnfusion matrix the model is not predicting very well the outcomes (about 50%).
+
+## RANDOM FOREST
+```{r}
+model_RF <- train(classe~., data=Train1, method="rf", trControl=trControl, verbose=FALSE)
+```
+
+### Confusion matrix
+```{r}
+trainpred <- predict(model_RF,newdata=Test1)
+confMatRF <- confusionMatrix(Test1$classe,trainpred)
+confMatRF$table
+```
+### Accuracy
+```{r}
+confMatRF$overall[1]
+```
+
+```{r}
+plot(model_RF$finalModel,main="Model error (Random forest) vs. number of trees")
+```
+
+### Variable Importance
+```{r}
+MostImpVars <- varImp(model_RF)
+MostImpVars
+```
+As we can see in the calculations above, the accuracy of the random forest method is 99,4%. Actually, this method appears to be very good.
+
+Also we can see that using more than 30 trees, the error is not reduced significantly.
+
+## GRADIENT BOOSTING
+```{r}
+model_GBM <- train(classe~., data=Train1, method="gbm", trControl=trControl, verbose=FALSE)
+print(model_GBM)
+```
+
+###Ploting the model
+```{r}
+plot(model_GBM)
+```
+### Confusion matrix
+```{r}
+trainpred <- predict(model_GBM,newdata=Test1)
+confMatGBM <- confusionMatrix(Test1$classe,trainpred)
+confMatGBM$table
+```
+
+### Accuracy
+```{r}
+confMatGBM$overall[1]
+```
+
+As you can see in the calculation above, the Gradient Boosting method reach a 96,4% of precision. 
+
+##PREDICTING ON TEST DATA SET
+
+As you can see so far, the best model is the Random Forest. Then, we will use this model to predict the values of classe for th test dataset.
+
+```{r}
+FinalTestPred <- predict(model_RF,newdata=TestDataClean)
+FinalTestPred
+```
+
+
+
+
